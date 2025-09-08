@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>code14</title>
+  
+
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rainbow Scatter Plot</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+    }
+
+    #container {
+      display: flex;
+      height: 100vh;
+    }
+
+    #scatterPlot {
+      flex: 1;
+    }
+
+    #controls {
+      width: 180px;
+      padding: 20px;
+      background: #f9f9f9;
+      border-left: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .slider-group {
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      writing-mode: bt-lr;
+      -webkit-appearance: slider-vertical;
+      height: 150px;
+    }
+
+    .pill-toggle {
+      display: flex;
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      overflow: hidden;
+      width: 140px;
+    }
+
+    .pill-toggle label {
+      flex: 1;
+      text-align: center;
+      padding: 6px 0;
+      cursor: pointer;
+      background-color: #eee;
+      transition: background-color 0.2s;
+      font-size: 14px;
+    }
+
+    .pill-toggle input[type="radio"] {
+      display: none;
+    }
+
+    .pill-toggle input[type="radio"]:checked+label {
+      background-color: #4285f4;
+      color: white;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center; margin: 10px;">Upload CSV File</h2>
+  <input type="file" id="csvFile" accept=".csv" style="display:block; margin: 0 auto 10px;">
+
+  <div id="container">
+    <div id="scatterPlot"></div>
+    <div id="controls">
+      <h3>Filter by Year</h3>
+      <div class="slider-group">
+        <label for="maxYear">Max Year</label>
+        <input type="range" id="maxYear" min="1900" max="2025" value="2025">
+        <span id="maxYearLabel">2025</span>
+      </div>
+      <div class="slider-group">
+        <label for="minYear">Min Year</label>
+        <input type="range" id="minYear" min="1900" max="2025" value="1900">
+        <span id="minYearLabel">1900</span>
+      </div>
+      <div class="pill-toggle">
+        <input type="radio" id="allSF" name="xChoice" value="allSF" checked>
+        <label for="allSF">All SF</label>
+        <input type="radio" id="mainUpstairs" name="xChoice" value="mainUpstairs">
+        <label for="mainUpstairs">Main + upstairs</label>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let fullData = [];
+    let xColumnIndex = 27;
+
+    function renderPlot(data, minYear, maxYear) {
+      const filtered = data.filter(row =>
+        row.length >= 84 &&
+        typeof row[xColumnIndex] === 'number' &&
+        typeof row[18] === 'number' &&
+        typeof row[4] === 'string' &&
+        row[18] >= minYear &&
+        row[18] <= maxYear
+      ).sort((a, b) => a[18] - b[18]);
+
+      const x = filtered.map(row => row[xColumnIndex]);
+      const y = filtered.map(row =>
+        typeof row[83] === 'number' ? row[83] :
+        typeof row[3] === 'number' ? row[3] : null
+      );
+      const intensity = filtered.map(row => row[18]);
+      const hoverLabels = filtered.map((row, i) => {
+        const size = row[xColumnIndex];
+        const price = y[i] !== null ? Math.round(y[i] / 1000) + 'k' : 'N/A';
+        const year = row[18];
+        const address = row[4];
+        return `Size: ${size}<br>Price: ${price}<br>Year Built: ${year}<br>Address: ${address}<br><i>Click to open zillow listing in a new window.</i>`;
+      });
+
+      // Generate evenly spaced tick values
+      const tickCount = 5;
+      const tickvals = [];
+      const ticktext = [];
+      const step = (maxYear - minYear) / (tickCount - 1);
+      for (let i = 0; i < tickCount; i++) {
+        const val = Math.round(minYear + i * step);
+        tickvals.push(val);
+        ticktext.push(val.toString());
+      }
+
+      const trace = {
+        x,
+        y,
+        text: hoverLabels,
+        hoverinfo: 'text',
+        mode: 'markers',
+        customdata: filtered.map(row => row[4]),
+        marker: {
+          size: 12,
+          color: intensity,
+          colorscale: 'Rainbow',
+          cmin: minYear,
+          cmax: maxYear,
+          colorbar: {
+            title: {
+              text: 'Build Year',
+              side: 'top'
+            },
+            tickvals: tickvals,
+            ticktext: ticktext,
+            len: 0.75,
+            thickness: 20,
+            x: 1.05
+          },
+          line: {
+            width: 0
+          }
+        },
+        type: 'scatter'
+      };
+
+      const layout = {
+        title: 'Rainbow Scatter Plot from CSV',
+        xaxis: {
+          title: 'Size',
+          showgrid: true,
+          gridcolor: '#ddd',
+          dtick: 100
+        },
+        yaxis: {
+          title: 'Price',
+          showgrid: true,
+          gridcolor: '#ddd',
+          dtick: 100000
+        },
+        margin: {
+          r: 160,
+          t: 50,
+          b: 50,
+          l: 60
+        }
+      };
+
+      Plotly.newPlot('scatterPlot', [trace], layout, { responsive: true });
+
+      setTimeout(() => {
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 100);
+
+      document.getElementById('scatterPlot').on('plotly_click', function(data) {
+        const address = data.points[0].customdata;
+        if (address) {
+          const fullAddress = `${address} portland`;
+          const encoded = encodeURIComponent(fullAddress);
+          const url = `https://www.zillow.com/homes/${encoded}_rb/`;
+          window.open(url, '_blank');
+        }
+      });
+    }
+
+    function updatePlot() {
+      const minYear = parseInt(document.getElementById('minYear').value);
+      const maxYear = parseInt(document.getElementById('maxYear').value);
+      renderPlot(fullData, minYear, maxYear);
+    }
+
+    document.getElementById('csvFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      Papa.parse(file, {
+        header: false,
+        dynamicTyping: true,
+        complete: function(results) {
+          fullData = results.data;
+          updatePlot();
+        }
+      });
+    });
+
+    document.getElementById('minYear').addEventListener('input', function() {
+      const minYear = parseInt(this.value);
+      const maxYear = parseInt(document.getElementById('maxYear').value);
+      if (minYear > maxYear) this.value = maxYear;
+      document.getElementById('minYearLabel').textContent = this.value;
+      updatePlot();
+    });
+
+    document.getElementById('maxYear').addEventListener('input', function() {
+      const maxYear = parseInt(this.value);
+      const minYear = parseInt(document.getElementById('minYear').value);
+      if (maxYear < minYear) this.value = minYear;
+      document.getElementById('maxYearLabel').textContent = this.value;
+      updatePlot();
+    });
+
+    document.querySelectorAll('input[name="xChoice"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        xColumnIndex = this.value === 'mainUpstairs' ? 28 : 27;
+        updatePlot();
+      });
+    });
+
+    function fetchAndLoadDefaultCSV() {
+      fetch('datafile.csv')
+        .then(response => {
+          if (!response.ok) throw new Error('Default CSV not found');
+          return response.text();
+        })
+        .then(csvText => {
+          Papa.parse(csvText, {
+            header: false,
+            dynamicTyping: true,
+            complete: function(results) {
+              fullData = results.data;
+              updatePlot();
+            },
+            error: function(err) {
+              console.error("Error parsing default CSV:", err);
+            }
+          });
+        })
+        .catch(err => {
+          console.warn("Default CSV not loaded:", err.message);
+        });
+    }
+
+    // Run on page load
+    window.addEventListener('DOMContentLoaded', fetchAndLoadDefaultCSV);
+  </script>
+</body>
+</html>
+<!-- partial -->
+  
+</body>
+</html>
